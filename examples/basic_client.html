@@ -1,0 +1,80 @@
+<html>
+    <head>
+        <script src="http://code.jquery.com/jquery-1.11.1.min.js"></script>
+        <script src="../js/jsbhandler.js"></script>
+        
+        <script type="text/javascript">
+            //
+            // Example Javascript client code of usage
+            //
+            
+            // Retrieve Singleton handler
+            var jsb = jsb.handler();
+            
+            // Wait for jsbhandler to initialize
+            $(jsb).on("ready", function() {
+                
+                // Create a client
+                var client1 = jsb.registerClient("homeClient", "localhost", 10100);                
+                // wait for connection
+                $(client1).on("connected", function() {
+                    // display connection state for fun
+                    $("connectionState").innerHTML = "Connected";
+                    
+                    // just so we know display current connection's duration with refresh-interval of 950ms
+                    var timeCheck = setInterval(function() {
+                        $("connectionTime").innerHTML = client1.connectionTime() + " sec";
+                    }, 950); // little less then a second - to be certain
+                    
+                    // Listen for disconnect event
+                    $(client1).on("disconnected", function() {
+                        // reset connection state flag
+                        $("connectionState").innerHTML = "Disconnected";
+                        // kill further time checks
+                        clearInterval(timeCheck);
+                    });
+                    
+                    // Listen for data event
+                    $(client1).on("readData", function(event, data) {
+                        // simply append data to repsonse list
+                        $("console").append($('<li>').text("Sent: " + JSON.stringify(data)));
+                    });
+                });
+                
+                // fire up some action on the page
+                $("connectfrm").submit(function() {
+                    client1.connect();
+                    return false; // prevent default submit
+                });
+                
+                $("sendfrm").submit(function() {
+                    var m = $("message").val();
+                    client1.send(m);
+                    $("console").append($('<li>').text("Received: " + m));
+                    $("message").val('');
+                    return false;
+                });
+            });
+        </script>
+    </head>
+    <body>
+        <h1>CMJavaSocketBridge Basic Example</h1>
+        <p>
+        <h2>Type host:port and hit connect</h2><span id="connectionState">Disconnected</span><span id="connectionTime"></span><br/>
+        <form id="connectfrm" action="">
+            <input type="text" id="host" /> <button>Connect</button><br/>
+        </form>
+        </p>
+        <p>
+        <h2>Data to send:</h2>
+        <form id="sendfrm" action="">
+            <textarea id="message" placeholder='{"test" : "json"}' cols="45" rows="10"></textarea><br /><button>Send</button>
+        </form>
+        </p>
+        <p>
+            <h2>Console:</h2>
+            <ul id="console"></ul>
+        </p>
+        <applet id="CMJavaSocketBridge" archive="java/dist/CMJavaSocketBridge.jar" code="CMJavaSocketBridge.class" width="1" height="1"></applet>
+    </body>
+</html>
