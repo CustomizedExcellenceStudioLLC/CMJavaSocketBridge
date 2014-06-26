@@ -24,6 +24,55 @@
 // 
 var appletId = "CMJavaSocketBridge";
 
+// Java Applet Accessor Methods
+function jaAppletReady() {
+    if(jsb.instance != null) {
+        jsb.instance.jaAppletReady();
+    } else {
+        console.warn("JSBHandler instance not initialized");
+    }
+}
+    
+function jaSetState(state) {
+    jsb.handler().jaSetState(state); 
+}
+
+// Method is called when a client has connected to a remote socket
+function jaConnected(clientID) {
+    jsb.handler().jaConnected(clientID);
+}
+
+// Method is called when a client has disconnected
+function jaDisconnected(clientID) {
+    jsb.handler().jaDisconnected(clientID);
+}
+
+// Method is called when a client fails to connect initially
+function jaFailedToConnectfunction(clientID, reason) {
+    jsb.handler().jaFailedToConnectfunction(clientID, reason);
+}
+
+// Method is called when a client has received data
+function jaReceivedData(clientID, data) {
+    jsb.handler().jaReceivedData(clientID, data);
+}
+    
+// Method is called when a client has sent data
+function jaSentData(clientID, data) {
+     jsb.handler().jaSentData(clientID, data);
+
+}
+    
+// Method is called when a client has failed to write data
+function jaFailedToWriteData(clientID, data) {
+    jsb.handler().jaFailedToWriteData(clientID, data);
+}
+
+// Method is called when a client or the applet has encountered an error 
+function jaError(clientID, error) {
+    jsb.handler().jaError(clientID, error);
+}
+
 // Singleton object
 function jsb(javaAppletID) {
     // documentation purposes
@@ -48,9 +97,10 @@ function jsb(javaAppletID) {
 
 jsb.constructor = jsb;
 jsb.prototype.commands = {
-    send : "send",
+    send : "sendmessage",
     connect : "connect",
-    disconnect : "disconnect"
+    disconnect : "disconnect",
+    register : "registerClient"
 };
 jsb.prototype = {
     // Reports an error to listeners of the Handler
@@ -121,6 +171,7 @@ jsb.prototype = {
     
     // Method is called when the Java Applet finished initializing and is ready for connections
     jaAppletReady : function () {
+            console.log("ready");
         $(this).trigger( "ready" );
     },
     
