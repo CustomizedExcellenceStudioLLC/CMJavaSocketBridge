@@ -34,43 +34,43 @@ function jaAppletReady() {
 }
     
 function jaSetState(state) {
-    jsb.handler().jaSetState(state); 
+    jsb.instance.jaSetState(state); 
 }
 
 // Method is called when a client has connected to a remote socket
 function jaConnected(clientID) {
-    jsb.handler().jaConnected(clientID);
+    jsb.instance.jaConnected(clientID);
 }
 
 // Method is called when a client has disconnected
 function jaDisconnected(clientID) {
-    jsb.handler().jaDisconnected(clientID);
+    jsb.instance.jaDisconnected(clientID);
 }
 
 // Method is called when a client fails to connect initially
 function jaFailedToConnectfunction(clientID, reason) {
-    jsb.handler().jaFailedToConnectfunction(clientID, reason);
+    jsb.instance.jaFailedToConnectfunction(clientID, reason);
 }
 
 // Method is called when a client has received data
 function jaReceivedData(clientID, data) {
-    jsb.handler().jaReceivedData(clientID, data);
+    jsb.instance.jaReceivedData(clientID, data);
 }
     
 // Method is called when a client has sent data
 function jaSentData(clientID, data) {
-     jsb.handler().jaSentData(clientID, data);
+    jsb.instance.jaSentData(clientID, data);
 
 }
     
 // Method is called when a client has failed to write data
 function jaFailedToWriteData(clientID, data) {
-    jsb.handler().jaFailedToWriteData(clientID, data);
+    jsb.instance.jaFailedToWriteData(clientID, data);
 }
 
 // Method is called when a client or the applet has encountered an error 
 function jaError(clientID, error) {
-    jsb.handler().jaError(clientID, error);
+    jsb.instance.jaError(clientID, error);
 }
 
 // Singleton object
@@ -80,13 +80,10 @@ function jsb(javaAppletID) {
     this.description = "Handler for Multithreaded Java Socket Bridge Applet";
     this.license = "The MIT License (MIT)";
     
-    // jquery object holder for 
-    this.applet = $(javaAppletID);
-
-    if(this.applet == 'undefined' || this.applet == null)
+    if(jsb.applet == null)
     {
         // cannot send error event from constructor.... so.
-        alert('CMJavaSocketBridge applet cannot be found. Quitting script execution.');
+        alert('CMJavaSocketBridge applet cannot be found. Quitting script execution.' + jsb.applet);
         return; // quit
     }
     
@@ -96,7 +93,7 @@ function jsb(javaAppletID) {
 }
 
 jsb.constructor = jsb;
-jsb.prototype.commands = {
+jsb.commands = {
     send : "sendmessage",
     connect : "connect",
     disconnect : "disconnect",
@@ -105,7 +102,7 @@ jsb.prototype.commands = {
 jsb.prototype = {
     // Reports an error to listeners of the Handler
     error : function (errMessage, data) {
-    $(this).trigger( "error", [ errMessage, data ] );  
+        $(this).trigger( "error", [ errMessage, data ] );  
     },
     
     // Returns the current State of the Java Applet as a String [offline, online, error]
@@ -130,7 +127,7 @@ jsb.prototype = {
                 host : host,
                 port : port
             });
-            return;
+            return "Cannot register client when Java Applet is not ready";
         }
 
         // otherwise register client
@@ -142,11 +139,19 @@ jsb.prototype = {
                 host : host,
                 port : port
             });
-            return;
+            return "Failed to initialize client";
         }
 
         // finally add created client to list
         this.clients[clientID] = client;
+        try {
+            // dispatch client registration to Applet
+            jsb.applet.command(clientID, jsb.commands.register, [clientID, host, port]);
+        } catch (err) {
+            console.log(err.message);
+        }
+        
+        return client;
     },
     
     // Returns a client object with a specific id or null if there's no such client
@@ -171,12 +176,13 @@ jsb.prototype = {
     
     // Method is called when the Java Applet finished initializing and is ready for connections
     jaAppletReady : function () {
-            console.log("ready");
-        $(this).trigger( "ready" );
+        // can be used for custom initialization
     },
     
     jaSetState : function (state) {
         this.state = state;  
+        if(this.state == 1) // now online
+            $(this).trigger("ready");
     },
     
     // Method is called when a client has connected to a remote socket
@@ -282,10 +288,17 @@ jsb.prototype = {
 // Singleton instance holder
 jsb.instance = null;
 
+// Applet holder
+jsb.applet = null;
+
 // Static Singleton accessor for the jsbhandler JSObject for the Java Applet and other javascript functions
 jsb.handler = function () {
-    if(jsb.instance == null)
+    if(jsb.instance == null) {
+        // load applet the first time the instance is created
+        jsb.applet = document.getElementById(appletId);
         jsb.instance = new jsb(appletId);
+    }
+
     return jsb.instance; // singleton object
 };
 
@@ -307,37 +320,39 @@ JSBClient.prototype = {
     
     // Triggers a connect method in the Java Applet
     connect : function() {
-        if(jsbhandler.state == 1 && this.isConnected) {
+        if(jsb.instance.state == 1 && !this.isConnected) {
             // execute command through applet
-            jsbhandler.applet.command(this.clientID, jsbhandler.commands.connect, {
+            jsb.applet.command(
+                this.clientID, 
+                jsb.commands.connect, {
                 host : this.host, 
                 port : this.port
             });
         }
         else {
-            this.error("Cannot connect when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsbhandler.getState(), this.isConnected ]);
+            this.error("Cannot connect when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsb.instance.getState(), this.isConnected ]);
         }
     },
     
     // Triggers a disconnect method in the Java Applet
     disconnect : function () {
-        if(jsbhandler.state == 1 && this.isConnected) {
+        if(jsb.instance.state == 1 && this.isConnected) {
             // execute command through applet
-            jsbhandler.applet.command(this.clientID, jsbhandler.commands.disconnect, null);
+            jsb.applet.command(this.clientID, jsb.commands.disconnect, null);
         }
         else {
-            this.error("Cannot disconnect when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsbhandler.getState(), this.isConnected ]);
+            this.error("Cannot disconnect when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsb.instance.getState(), this.isConnected ]);
         }
     },
     
     // Triggers a send data method in the Java Applet
     send : function (data) {
-        if(jsbhandler.state == 1 && this.isConnected) {
+        if(jsb.instance.state == 1 && this.isConnected) {
             // execute command through applet
-            jsbhandler.applet.command(this.clientID, jsbhandler.commands.send, data);
+            jsb.applet.command(this.clientID, jsb.commands.send, data);
         }
         else {
-            this.error("Cannot send data when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsbhandler.getState(), this.isConnected ]);
+            this.error("Cannot send data when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsb.instance.getState(), this.isConnected ]);
         }
     },
         
