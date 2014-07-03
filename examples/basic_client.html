@@ -6,7 +6,7 @@
             .rlegend {
                 text-align: right;
             }
-            .console { list-style-type: none; margin: 0; padding: 0; }
+            .console { list-style-type: none; margin: 0; padding: 10px; }
             .console li { padding: 5px 10px; }
             .console li:nth-child(odd) { background: #eee; }
         </style>
@@ -21,45 +21,29 @@
                 // Retrieve Singleton handler
                 var jsbhandler = jsb.handler();
 
+                $(jsbhandler).on("error", function(event, err) {
+                    console.error(err[0]);
+                });
+                
                 // Wait for jsbhandler to initialize
                 $(jsbhandler).on("ready", function() {
+                    $(jsbhandler).on("clientRegistered", function(event, client) {
+                        
+                    });
+                    
                     // fire up some action on the page
-                    $("#connectfrm").on("submit", function() {   
-                        // Create a client
-                        var client1 = jsbhandler.registerClient("homeClient", "localhost", 10100);                
-
-                        // wait for connection
-                        $(client1).on("connected", function() {
-                            // display connection state for fun
-                            $("#connectionState").innerHTML = "Connected";
-
-                            // just so we know display current connection's duration with refresh-interval of 950ms
-                            var timeCheck = setInterval(function() {
-                                $("#connectionTime").innerHTML = client1.connectionTime() + " sec";
-                            }, 950); // little less then a second - to be certain
-
-                            // Listen for disconnect event
-                            $(client1).on("disconnected", function() {
-                                // reset connection state flag
-                                $("#connectionState").innerHTML = "Disconnected";
-                                // kill further time checks
-                                clearInterval(timeCheck);
-                            });
-
-                            // Listen for data event
-                            $(client1).on("readData", function(event, data) {
-                                // simply append data to repsonse list
-                                $("#console").append($('<li>').text("Sent: " + JSON.stringify(data)));
-                            });
-                        });
-                        
-                        $(client1).on("error", function(error) {
-                            console.error(error);
-                        });
-                        
-                        if(client1 != null)
-                            client1.connect();
-                            
+                    $("#connectfrm").on("submit", function() {  
+                        var client = jsbhandler.getClient("homeClient");  
+                    
+                        try {
+                            if(client.isConnected)
+                                client.disconnect();
+                            else
+                                client.connect();   
+                        } catch(err){
+                            console.warn("connect err:" + err.message);
+                        }
+                                
                         return false;
                     });
 
@@ -67,13 +51,49 @@
                         if(typeof client1 !== 'undefined') {
                             var m = $("#message").val();
                             client1.send(m);
-                            $("#console").append($('<li>').text("Received: " + m));
+                            $("#console").append($('<li>').text("Sent: " + m));
                             $("#message").val('');
                         } else {
                             console.warn("client cannot be found...");
                         }
                         
                         return false;
+                    });
+                    
+                    // Create a client on the handler
+                    var client1ID = "homeClient";
+                    var client1 = jsbhandler.registerClient(client1ID, "localhost", 10100); 
+                    // wait for connection
+                    $(client1).on("connected", function() {
+                        // display connection state for fun
+                        $("#connectionState").text( "Conntected" );
+                        $("#connect").text("Disconnect"); // change button label
+                        
+                        // just so we know display current connection's duration with refresh-interval of 950ms
+                        var timeCheck = setInterval(function() {
+                            $("#connectionTime").text( client1.connectionTime() + " sec" );
+                        }, 950); // little less then a second - to be certain
+
+                        // Listen for disconnect event
+                        $(client1).on("disconnected", function() {
+                            // reset connection state flag
+                            $("#connectionState").text( "Disconnected" );
+                            $("#connectionTime").text("");
+                            // change button label
+                            $("#connect").text("Connect");
+                            // kill further time checks
+                            clearInterval(timeCheck);
+                        });
+
+                        // Listen for data event
+                        $(client1).on("readData", function(event, data) {
+                            // simply append data to repsonse list
+                            $("#console").append($('<li>').text("Received: " + JSON.stringify(data)));
+                        });
+                    });
+
+                    $(client).on("error", function(event, error) {
+                        console.error(error[0] + "\n" + error[1]);
                     });
                 });
             });
@@ -102,7 +122,7 @@
                 <form action="" class="pure-form pure-form-stacked">
                     <legend class="rlegend">Console</legend>
                 </form>
-                <ul id="console"></ul>
+                <ul id="console" class="console"></ul>
             </div>
         </div>
         <applet id="CMJavaSocketBridge" archive="../java/dist/CMJavaSocketBridge.jar" code=com.cmexc.socketbridge.CMJSocketBridge.class width="1" height="1" mayscript></applet>

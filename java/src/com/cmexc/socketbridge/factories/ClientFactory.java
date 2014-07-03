@@ -40,8 +40,8 @@ import com.cmexc.socketbridge.models.BaseClient;
  */
 public class ClientFactory {
 
-	public static ClientModel makeClient(String id, String host, int port, CMJSocketBridge bridge) {
+	public static ClientModel makeClient(String id, String host, Double port, CMJSocketBridge bridge) {
 		// for now, just return a base client
-		return new BaseClient(id, host, port, bridge);
+		return new BaseClient(id, host, port.intValue(), bridge);
 	}
 }

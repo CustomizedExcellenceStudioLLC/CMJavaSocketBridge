@@ -34,43 +34,56 @@ function jaAppletReady() {
 }
     
 function jaSetState(state) {
+    console.info('setting jsbhandler state: ' + state);
     jsb.instance.jaSetState(state); 
 }
 
 // Method is called when a client has connected to a remote socket
 function jaConnected(clientID) {
+    console.info(clientID + ' client connected to remote host');
     jsb.instance.jaConnected(clientID);
 }
 
 // Method is called when a client has disconnected
 function jaDisconnected(clientID) {
+    console.info(clientID + ' client disconnected from remote host');
     jsb.instance.jaDisconnected(clientID);
 }
 
 // Method is called when a client fails to connect initially
-function jaFailedToConnectfunction(clientID, reason) {
+function jaFailedToConnect(clientID, reason) {
+    console.warn(clientID + ' client failed to connect to remote host, because: '  + reason);
     jsb.instance.jaFailedToConnectfunction(clientID, reason);
 }
 
 // Method is called when a client has received data
 function jaReceivedData(clientID, data) {
+    console.info(clientID + ' received data from remote host. Data: ' + data);
     jsb.instance.jaReceivedData(clientID, data);
 }
     
 // Method is called when a client has sent data
 function jaSentData(clientID, data) {
+    console.info(clientID + ' client sent data to remote host. Data: ' + data);
     jsb.instance.jaSentData(clientID, data);
 
 }
     
 // Method is called when a client has failed to write data
 function jaFailedToWriteData(clientID, data) {
+    console.warn(clientID + ' client failed to send data to remote host. Data: ' + data);
     jsb.instance.jaFailedToWriteData(clientID, data);
 }
 
 // Method is called when a client or the applet has encountered an error 
 function jaError(clientID, error) {
+    console.warn(clientID + ' client hit error. Error: ' + error);
     jsb.instance.jaError(clientID, error);
+}
+
+function jaClientRegistered(clientID) {
+    console.info(clientID + ' client registered with Applet.');
+    jsb.instance.jaClientRegistered(clientID);
 }
 
 // Singleton object
@@ -102,6 +115,7 @@ jsb.commands = {
 jsb.prototype = {
     // Reports an error to listeners of the Handler
     error : function (errMessage, data) {
+        console.error("triggering error: " + errMessage + " data: " + data);
         $(this).trigger( "error", [ errMessage, data ] );  
     },
     
@@ -143,13 +157,10 @@ jsb.prototype = {
         }
 
         // finally add created client to list
-        this.clients[clientID] = client;
-        try {
-            // dispatch client registration to Applet
-            jsb.applet.command(clientID, jsb.commands.register, [clientID, host, port]);
-        } catch (err) {
-            console.log(err.message);
-        }
+        this.clients.clientID = client;
+        
+        // dispatch client registration to Applet
+        jsb.applet.command(null, jsb.commands.register, [clientID, host, port]);
         
         return client;
     },
@@ -157,7 +168,7 @@ jsb.prototype = {
     // Returns a client object with a specific id or null if there's no such client
     getClient : function (clientID) {
         // Find the appropriate client to trigger the event
-        var client = this.clients[clientID];
+        var client = this.clients.clientID;
         if(client == null)
         {
             // there's no such client --> report error
@@ -188,7 +199,7 @@ jsb.prototype = {
     // Method is called when a client has connected to a remote socket
     jaConnected : function (clientID) {
         // Find the appropriate client to trigger the event
-        var client = this.clients[clientID];
+        var client = this.clients.clientID;
         if(client == null)
         {
             // there's no such client --> report error
@@ -279,7 +290,23 @@ jsb.prototype = {
             var client = this.getClient(clientID);
             if(client != null)
             {
-                client.error("[ERR] JSBClient error.", error);
+                client.error("[ERR] JSBClient error. ", error);
+            }
+        }
+    },
+    
+    // Method is called when a client has finished the registration process
+    jaClientRegistered : function (clientID) {
+        if(clientID == null)
+        {
+            // report java applet error directly
+            this.error("[ERR] Java Applet failed to register client. ");
+        } else {
+            // dispatch error to client directly
+            var client = this.getClient(clientID);
+            if(client != null)
+            {
+                $(this).trigger("clientRegistered", client);
             }
         }
     }
@@ -315,19 +342,14 @@ function JSBClient (clientID, host, port) {
 JSBClient.constructor = JSBClient;
 JSBClient.prototype = {
     getInfo : function() {
-    return this.clientID + ' is connected: ' + this.isConnected;    
+        return this.clientID + ' is connected: ' + this.isConnected;    
     },
     
     // Triggers a connect method in the Java Applet
     connect : function() {
         if(jsb.instance.state == 1 && !this.isConnected) {
             // execute command through applet
-            jsb.applet.command(
-                this.clientID, 
-                jsb.commands.connect, {
-                host : this.host, 
-                port : this.port
-            });
+            jsb.applet.command(this.clientID, jsb.commands.connect, null);
         }
         else {
             this.error("Cannot connect when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsb.instance.getState(), this.isConnected ]);
@@ -349,7 +371,7 @@ JSBClient.prototype = {
     send : function (data) {
         if(jsb.instance.state == 1 && this.isConnected) {
             // execute command through applet
-            jsb.applet.command(this.clientID, jsb.commands.send, data);
+            jsb.applet.command(this.clientID, jsb.commands.send, [data]);
         }
         else {
             this.error("Cannot send data when Java Bridge is not ready or Client is not connected. Data: [Applet State, Client isConnected]", [jsb.instance.getState(), this.isConnected ]);
@@ -373,8 +395,10 @@ JSBClient.prototype = {
     connected : function () {
         // connect logically and trigger connect event
         this.isConnected = true;
-        $(this).trigger( "connected" );  
         this.connectionTimestamp = Date.now;
+        
+        $(this).trigger( "connected" );  
+        
     },
     
     // Method is called when remote socket has reset the connection or a network failure has occured, or even when the client has disconnected gracefully

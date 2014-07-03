@@ -41,5 +41,6 @@ public enum Events {
 	Connected,
 	Disconnected, 
 	FailedToWriteData, 
-	FailedToConnect
+	FailedToConnect, 
+	ClientRegistered
 }

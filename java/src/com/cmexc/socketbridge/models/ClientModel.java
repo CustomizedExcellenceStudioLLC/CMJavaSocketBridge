@@ -57,6 +57,8 @@ public abstract class ClientModel implements Runnable, ClientConnection {
 	protected PrintWriter out;
 	protected BufferedReader in;
 
+	protected boolean isConnected;
+
 	/**
 	 * @return the clientId
 	 */
@@ -81,12 +83,16 @@ public abstract class ClientModel implements Runnable, ClientConnection {
 	 */
 	@Override
 	public boolean connect() throws ClientAlreadyConnectedException, IOException {
-		if(this.socket != null && this.socket.isConnected())
+		if(this.socket != null && this.socket.isConnected() && isConnected)
 			throw new ClientAlreadyConnectedException();
 		
 		this.socket = new Socket(host, port);
 		out = new PrintWriter(socket.getOutputStream());
 		in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+		
+		isConnected = true;
+		
+		bridge.dispatchEvent(Events.Connected, clientId, null);
 		
 		return true; // if we get to this point, we're out of the woods
 	}
@@ -96,19 +102,31 @@ public abstract class ClientModel implements Runnable, ClientConnection {
 	 */
 	@Override
 	public boolean disconnect() {
-		// TODO Auto-generated method stub
-		return false;
+		try {
+			this.socket.close();
+			this.in.close();
+			this.out.close();
+			isConnected = false;
+		} catch (IOException e) {
+			bridge.dispatchEvent(Events.Error, clientId, "Failed to disconnect. " + e.getMessage());
+		}
+
+		return !isConnected;
 	}
 
 	/* (non-Javadoc)
 	 * @see com.cmexc.socketbridge.interfaces.ClientConnection#sendMessage()
 	 */
 	@Override
-	public synchronized void sendMessage(String message) {
+	public synchronized boolean sendMessage(String message) {
 		// for now
 		out.write(message);
 		boolean error = out.checkError();
 		if(error)
 			bridge.dispatchEvent(Events.FailedToWriteData, clientId, message);
+		else
+			bridge.dispatchEvent(Events.DataSent, clientId, message);
+		
+		return !error;
 	}
 }

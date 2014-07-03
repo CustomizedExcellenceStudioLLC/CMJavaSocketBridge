@@ -41,5 +41,5 @@ import com.cmexc.socketbridge.exceptions.ClientAlreadyConnectedException;
 public interface ClientConnection {
 	public boolean connect() throws ClientAlreadyConnectedException, IOException;
 	public boolean disconnect();
-	public void sendMessage(String message);
+	public boolean sendMessage(String message);
 }

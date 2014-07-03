@@ -47,7 +47,6 @@ public class BaseClient extends ClientModel {
 	 */
 	public BaseClient(String id, String host, int port, CMJSocketBridge bridge) {
 		super(id, host, port, bridge);
-		// TODO Auto-generated constructor stub
 	}
 
 	/* (non-Javadoc)
@@ -57,11 +56,17 @@ public class BaseClient extends ClientModel {
 	public void run() {
 		while(!Thread.currentThread().isInterrupted() || !stopping) {
 			try {
-				String message = in.readLine();
-				
-				bridge.clientReceivedMessage(this.clientId, message);
+				// Only listen to message if we've been connected
+				if(isConnected) {
+					String message = in.readLine();
+					bridge.clientReceivedMessage(this.clientId, message);
+				} else {
+					Thread.sleep(100); // sleep 100 ms
+				}
 			} catch (IOException e) {
-				bridge.dispatchEvent(Events.Error, clientId, "IOException on client receive.");
+				bridge.dispatchEvent(Events.Error, clientId, "IOException on client receive. " + e.getMessage());
+			} catch (InterruptedException e) {
+				bridge.dispatchEvent(Events.Error, clientId, "Thread interrupted on client run." + e.getMessage());
 			}
 		}
 	}
@@ -70,9 +75,8 @@ public class BaseClient extends ClientModel {
 	 * @see com.cmexc.socketbridge.models.ClientModel#sendMessage()
 	 */
 	@Override
-	public synchronized void sendMessage(String message) {
-		// simply throw it up the chain for now
-		super.sendMessage(message);
+	public synchronized boolean sendMessage(String message) {
+		return super.sendMessage(message);
 	}
 
 }

@@ -61,6 +61,7 @@ public class CMJSocketBridge extends Applet {
 	private static final long serialVersionUID = 735804524173385466L;
 	private JSObject browser;
 	private HashMap<String, ClientModel> clients;
+	private final static boolean DEBUG = false;
 
 	/**
 	 * @see java.applet.Applet#init()
@@ -105,9 +106,19 @@ public class CMJSocketBridge extends Applet {
 	 * The method to invoke from JS to perform the privileged methods--which throw
 	 * security errors if you try to access them directly.
 	 * 
-	 * @param command - the command you want to perform (clipboard, screenshot, upload)
+	 * @param who
+	 * @param what  the command you want to perform (clipboard, screenshot, upload)
+	 * @param data
 	 */
-	public boolean command(final String who, String what, final JSObject data){
+	public boolean command(String who, String what, Object[] data){
+		if(data != null){
+			log("command received: " + what + " paramsCount: " + data.length + " from: " + who);
+		for(int i = 0; i < data.length; i++)
+	    	log("received data[" + i + "]: " + data[i]);
+		} else {
+			log("command received: " + what + " paramsCount: null from: " + who);
+		}
+		
 	    final JSBCommand cmd = JSBCommand.commandByName(what);
 	    if(cmd == JSBCommand.NonCommand)
 	    {
@@ -116,28 +127,32 @@ public class CMJSocketBridge extends Applet {
 	    }
 	    
 	    Boolean success = false;
-	    
+
 	    // Decide whether we need elevated permissions or not
 	    if(cmd == JSBCommand.Connect) {
 	    	try {
+	    		final String clientId = who;
+	    		final Object[] dat = data;
 				success = java.security.AccessController.doPrivileged(new java.security.PrivilegedExceptionAction<Boolean>(){
 					@Override
-					public Boolean run() throws ClientIdNotDefinedException, ClientIdDuplicateException, ClientIdNotRegistered, ClientAlreadyConnectedException {
+					public Boolean run() throws Exception {
 						// execute the privileged command
-						return executeCommand(who, cmd, data);
+						return executeCommand(clientId, cmd, dat);
 					}
 				});
 			} catch (PrivilegedActionException e) {
-				log("Failed to execute command. Exception: " + e.getMessage());
-				dispatchEvent(Events.Error, null, e.getMessage());
+				log("Failed to execute command. PrivilegedActionException: " + e.getCause().getMessage());
+				dispatchEvent(Events.Error, null, e.getCause().getMessage());
+			} catch (Exception e) {
+				log("Failed to execute command. " + e.getClass().getSimpleName() + ": " + e.getMessage());
+				dispatchEvent(Events.Error, null, e.getClass().getSimpleName() + ": " + e.getMessage());
 			}
 	    } else {
 	    	// simply dispatch command
 	    	try {
 				success = executeCommand(who, cmd, data);
-			} catch (ClientIdNotDefinedException | ClientIdDuplicateException
-					| ClientIdNotRegistered | ClientAlreadyConnectedException e) {
-				log("Failed to execute command. Exception: " + e.getMessage());
+			} catch (Exception e) {
+				log("Failed to execute command. Exception: " + e.getClass().getSimpleName() + ": " + e.getMessage());
 				dispatchEvent(Events.Error, null, e.getMessage());
 			}
 	    }
@@ -153,15 +168,29 @@ public class CMJSocketBridge extends Applet {
 	 * @param data the error message itself, can be null for notification type events
 	 */
 	public void dispatchEvent(Events event, String clientID, String message) {
+		String traceString = "";
+		
+		if(DEBUG) {
+			StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
+		    for (StackTraceElement s : stacktrace) {
+		        traceString = traceString + s.toString() + "\n\t\t";
+		    }
+		}
+		log("dispatching event: " + event.toString() + " for client: " + clientID + "\n" + traceString);
+		
 		String fnToCall = null;
 		switch(event) {
 		case Connected:
-			// call directly due to parameter count indifference
-			this.browser.call("jaSentData", new String[] {clientID});
+			// call directly due to parameter count difference
+			this.browser.call("jaConnected", new String[] {clientID});
 			break;
 		case Disconnected:
-			// call directly due to parameter count indifference
-			this.browser.call("jaSentData", new String[] {clientID});
+			// call directly due to parameter count difference
+			this.browser.call("jaDisconnected", new String[] {clientID});
+			break;
+		case ClientRegistered:
+			// call directly due to parameter count difference
+			this.browser.call("jaClientRegistered", new String[] {clientID});
 			break;
 		case DataReceived:
 			fnToCall = "jaReceivedData";
@@ -193,29 +222,66 @@ public class CMJSocketBridge extends Applet {
 	 * @param who The Thread/Socket who has to perform the command
 	 * @param cmd
 	 * @param data 
-	 * @throws ClientIdDuplicateException 
-	 * @throws ClientIdNotDefinedException 
-	 * @throws ClientIdNotRegistered 
-	 * @throws ClientAlreadyConnectedException 
+	 * @throws Exception 
 	 */
-	protected boolean executeCommand(String who, JSBCommand cmd, JSObject data) throws ClientIdNotDefinedException, ClientIdDuplicateException, ClientIdNotRegistered, ClientAlreadyConnectedException {
+	protected boolean executeCommand(String who, JSBCommand cmd, Object[] data) throws Exception {
 		boolean retVal = false;
 		switch(cmd){
 		case RegisterClient:
-			retVal = createClient(who, data);
+			retVal = createClient(data);
 			break;
 		case Connect:
 			retVal = connect(who);
 			break;
-		case Disconnect:
+		case Disconnect: {
+			retVal = disconnect(who);
 			break;
+		}
 		case NonCommand:
+			throw new Exception("Cannot perform non-defined commands. Oops.");
+		case SendMessage: {
+			if(data == null || data.length < 1)
+				throw new Exception("Missing Data message");
+			retVal = sendMessage(who, (String) data[0]);
 			break;
-		case SendMessage:
-			break;
+		}
 		default:
 			break;
 		}
+		return retVal;
+	}
+
+	/**
+	 * <p></p>
+	 * <i>Note: </i>
+	 * @param who
+	 * @param data
+	 * @return
+	 * @throws ClientIdNotRegistered
+	 */
+	private boolean sendMessage(String who, String message)
+			throws ClientIdNotRegistered {
+		boolean retVal;
+		ClientModel client = this.clients.get(who);
+		if(client == null)
+			throw new ClientIdNotRegistered(who);
+		retVal = client.sendMessage(message);
+		return retVal;
+	}
+
+	/**
+	 * <p></p>
+	 * <i>Note: </i>
+	 * @param who
+	 * @return
+	 * @throws ClientIdNotRegistered
+	 */
+	private boolean disconnect(String who) throws ClientIdNotRegistered {
+		boolean retVal;
+		ClientModel client = this.clients.get(who);
+		if(client == null)
+			throw new ClientIdNotRegistered(who);
+		retVal = client.disconnect();
 		return retVal;
 	}
 	
@@ -237,9 +303,6 @@ public class CMJSocketBridge extends Applet {
 		boolean success;
 		try {
 			success = cm.connect();
-			
-			// otherwise we have succeeded, right?
-			dispatchEvent(Events.Connected, who, null);
 		} catch (IOException e) {
 			success = false; 
 			// report failed to connect
@@ -255,26 +318,34 @@ public class CMJSocketBridge extends Applet {
 	 * @param who
 	 * @param data contains constructor info for client in the following format: { host : "hostname", port : "port" }
 	 * @return
-	 * @throws ClientIdNotDefinedException 
-	 * @throws ClientIdDuplicateException 
+	 * @throws Exception 
 	 */
-	private boolean createClient(String who, JSObject data) throws ClientIdNotDefinedException, ClientIdDuplicateException {
-		if(who == null)
-			throw new ClientIdNotDefinedException(data.toString());
-		else if(this.clients.containsKey(who))
-			throw new ClientIdDuplicateException(who);
-		
+	private boolean createClient(Object[] data) throws Exception {
 		// Translate JSObject to Java
-		String hostname = (String) data.getMember("host");
-		int port = (int) data.getMember("port");
+		String clientName = (String) data[0];
+		String hostname = (String) data[1];
+		Double port = (Double) data[2];
+		
+		log("creating new clientmodel with client: " + clientName + " host: " + hostname + " port: " + port);
+		
+		if(data.length < 3)
+			throw new Exception("Parameter array's Length is incorrect. Specify the following: [clientID, hostname, port]");
+		else if(clientName == null)
+			throw new ClientIdNotDefinedException(data.toString());
+		else if(this.clients.containsKey(clientName))
+			throw new ClientIdDuplicateException(clientName);
 		
 		// fire up new client thread
-		ClientModel client = ClientFactory.makeClient(who, hostname, port, this);
+		ClientModel client = ClientFactory.makeClient(clientName, hostname, port, this);
 		Thread t = new Thread(client); // name the thread after the client automatically
-		this.clients.put(who, client);
+		this.clients.put(clientName, client);
 		t.start(); // kick off - but we don't retain the thread
 		
-		return this.clients.containsKey(who); // if clients contains the clientId, we most probably succeeded
+		boolean success = this.clients.containsKey(clientName);
+		if(success) 
+			this.dispatchEvent(Events.ClientRegistered, (String) data[0], null);
+		
+		return success; // if clients contains the clientId, we most probably succeeded
 	}
 
 	// Log something to console
