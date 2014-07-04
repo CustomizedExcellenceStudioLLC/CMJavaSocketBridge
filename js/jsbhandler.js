@@ -395,7 +395,7 @@ JSBClient.prototype = {
     connected : function () {
         // connect logically and trigger connect event
         this.isConnected = true;
-        this.connectionTimestamp = Date.now;
+        this.connectionTimestamp = Date.now();
         
         $(this).trigger( "connected" );  
         

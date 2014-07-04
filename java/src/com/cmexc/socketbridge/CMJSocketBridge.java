@@ -61,7 +61,7 @@ public class CMJSocketBridge extends Applet {
 	private static final long serialVersionUID = 735804524173385466L;
 	private JSObject browser;
 	private HashMap<String, ClientModel> clients;
-	private final static boolean DEBUG = false;
+	private final static boolean DEBUG = true;
 
 	/**
 	 * @see java.applet.Applet#init()
@@ -176,6 +176,7 @@ public class CMJSocketBridge extends Applet {
 		        traceString = traceString + s.toString() + "\n\t\t";
 		    }
 		}
+		
 		log("dispatching event: " + event.toString() + " for client: " + clientID + "\n" + traceString);
 		
 		String fnToCall = null;
@@ -337,7 +338,7 @@ public class CMJSocketBridge extends Applet {
 		
 		// fire up new client thread
 		ClientModel client = ClientFactory.makeClient(clientName, hostname, port, this);
-		Thread t = new Thread(client); // name the thread after the client automatically
+		Thread t = new Thread(client, clientName); // name the thread after the client automatically
 		this.clients.put(clientName, client);
 		t.start(); // kick off - but we don't retain the thread
 		
@@ -350,7 +351,8 @@ public class CMJSocketBridge extends Applet {
 
 	// Log something to console
 	public void log(String message){
-		System.out.println(message);
+		if(DEBUG)
+			System.out.println(message);
 	}
 
 	/**

@@ -69,10 +69,10 @@
                         $("#connectionState").text( "Conntected" );
                         $("#connect").text("Disconnect"); // change button label
                         
-                        // just so we know display current connection's duration with refresh-interval of 950ms
+                        // just so we know display current connection's duration with refresh-interval of 1000ms
                         var timeCheck = setInterval(function() {
-                            $("#connectionTime").text( client1.connectionTime() + " sec" );
-                        }, 950); // little less then a second - to be certain
+                            $("#connectionTime").text(" " + client1.connectionTime() + " sec" );
+                        }, 1000); // little less then a second - to be certain
 
                         // Listen for disconnect event
                         $(client1).on("disconnected", function() {
@@ -107,8 +107,6 @@
                 <form id="connectfrm" action="" class="pure-form pure-form-stacked">
                     
                         <legend><span id="connectionState">Disconnected</span><span id="connectionTime"></span></legend>
-                        <label for="host">Type host:port and hit connect</label>
-                        <input type="text" id="host">
                         <button id="connect" class="pure-button pure-button-primary">Connect</button>
                 </form>
 

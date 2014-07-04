@@ -55,16 +55,29 @@ public class BaseClient extends ClientModel {
 	@Override
 	public void run() {
 		while(!Thread.currentThread().isInterrupted() || !stopping) {
+			
 			try {
 				// Only listen to message if we've been connected
 				if(isConnected) {
 					String message = in.readLine();
 					bridge.clientReceivedMessage(this.clientId, message);
-				} else {
-					Thread.sleep(100); // sleep 100 ms
-				}
+				} 
 			} catch (IOException e) {
-				bridge.dispatchEvent(Events.Error, clientId, "IOException on client receive. " + e.getMessage());
+				if(!stopping)
+					bridge.dispatchEvent(Events.Error, clientId, "IOException on client receive. " + e.getMessage());
+			} 
+			
+			// if we're outside the here with stopping, we should change state
+			if(stopping && isConnected)
+			{
+				// only send once
+				isConnected = false;
+				bridge.dispatchEvent(Events.Disconnected, clientId, null);
+			}
+			
+			// anyhow, sleep here
+			try {
+				Thread.sleep(100); // sleep 100 ms
 			} catch (InterruptedException e) {
 				bridge.dispatchEvent(Events.Error, clientId, "Thread interrupted on client run." + e.getMessage());
 			}

@@ -103,10 +103,10 @@ public abstract class ClientModel implements Runnable, ClientConnection {
 	@Override
 	public boolean disconnect() {
 		try {
+			this.stopping = true;
 			this.socket.close();
 			this.in.close();
 			this.out.close();
-			isConnected = false;
 		} catch (IOException e) {
 			bridge.dispatchEvent(Events.Error, clientId, "Failed to disconnect. " + e.getMessage());
 		}
@@ -120,7 +120,8 @@ public abstract class ClientModel implements Runnable, ClientConnection {
 	@Override
 	public synchronized boolean sendMessage(String message) {
 		// for now
-		out.write(message);
+		out.println(message);
+		
 		boolean error = out.checkError();
 		if(error)
 			bridge.dispatchEvent(Events.FailedToWriteData, clientId, message);
